@@ -76,7 +76,7 @@ cd client
 npm run dev
 ```
 
-Frontend will run on `http://localhost:5173`
+Frontend will run on `http://localhost:3000`
 
 ## 📋 Phase 1 - Core New-Hire Auto-Sync
 
