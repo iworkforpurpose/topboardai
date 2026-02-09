@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 interface Task {
   id: string;
   title: string;
@@ -78,7 +80,7 @@ const NewHireDashboard: React.FC = () => {
   const loadTasks = async (employeeEmail: string) => {
     setIsLoadingTasks(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/tasks?employeeEmail=${encodeURIComponent(employeeEmail)}`);
+      const response = await fetch(`${API_BASE}/api/tasks?employeeEmail=${encodeURIComponent(employeeEmail)}`);
       const result = await response.json();
       if (result.success && Array.isArray(result.data)) {
         setTasks(result.data.map((t: any) => ({
@@ -105,7 +107,7 @@ const NewHireDashboard: React.FC = () => {
     setIsVerifying(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/verify-token', {
+      const response = await fetch(`${API_BASE}/api/auth/verify-token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,7 +149,7 @@ const NewHireDashboard: React.FC = () => {
     setTasks(tasks.map(t => t.id === taskId ? { ...t, isCompleted: nextCompleted } : t));
 
     try {
-      await fetch(`http://localhost:5000/api/tasks/${taskId}`, {
+      await fetch(`${API_BASE}/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isCompleted: nextCompleted }),

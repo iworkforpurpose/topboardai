@@ -224,11 +224,28 @@ const HRDashboard: React.FC<HRDashboardProps> = ({ currentView }) => {
     }
   };
 
-  // Stats
-  const notStartedCount = employees.filter(e => e.status === 'NOT_STARTED').length;
-  const onTrackCount = employees.filter(e => e.status === 'ON_TRACK').length;
-  const completedCount = employees.filter(e => e.status === 'COMPLETED').length;
-  const totalCount = employees.length || 1;
+  // Stats derived from actual progress so counts stay accurate
+  const { notStartedCount, activeCount, completedCount, totalCount } = React.useMemo(() => {
+    let ns = 0;
+    let active = 0;
+    let done = 0;
+    employees.forEach((emp) => {
+      const pct = Math.max(0, Math.min(100, getProgress(emp)));
+      if (pct >= 100 || emp.status === 'COMPLETED') {
+        done += 1;
+      } else if (pct > 0) {
+        active += 1;
+      } else {
+        ns += 1;
+      }
+    });
+    return {
+      notStartedCount: ns,
+      activeCount: active,
+      completedCount: done,
+      totalCount: employees.length || 1,
+    };
+  }, [employees, tasksByEmployee]);
 
   const handleCreateHire = (e: React.FormEvent) => {
     e.preventDefault();
@@ -373,14 +390,14 @@ const HRDashboard: React.FC<HRDashboardProps> = ({ currentView }) => {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-slate-500">Active Onboarding</p>
-              <p className="text-3xl font-bold text-slate-900 mt-2">{onTrackCount}</p>
+              <p className="text-3xl font-bold text-slate-900 mt-2">{activeCount}</p>
             </div>
             <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
               <Clock size={20} />
             </div>
           </div>
           <div className="mt-4 w-full bg-gray-100 rounded-full h-1.5">
-            <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${(onTrackCount / totalCount) * 100}%` }}></div>
+            <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${(activeCount / totalCount) * 100}%` }}></div>
           </div>
         </div>
 

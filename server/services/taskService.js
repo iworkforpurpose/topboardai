@@ -1,4 +1,5 @@
-const { bolticClient, TASKS_TABLE_NAME } = require('../config/boltic');
+const { bolticClient, TASKS_TABLE_NAME, EMPLOYEES_TABLE_NAME } = require('../config/boltic');
+const { updateEmployee } = require('./employeeService');
 
 const LEGACY_KEY_MAP = {
   laptop_received: 'laptop_recieved',
@@ -136,6 +137,46 @@ async function getTasksForEmployee(employeeEmail) {
   });
 }
 
+async function syncEmployeeProgress(employeeEmail) {
+  const normalizedEmail = (employeeEmail || '').trim().toLowerCase();
+  if (!normalizedEmail || !EMPLOYEES_TABLE_NAME) {
+    return null;
+  }
+
+  const { data: allTasks, error: tasksError } = await bolticClient.records.findAll(TASKS_TABLE_NAME);
+  if (tasksError) {
+    throw new Error(tasksError.message || 'Failed to fetch tasks for progress sync');
+  }
+
+  const tasksForEmployee = (allTasks || []).filter(
+    (t) => (t.employee_email || '').trim().toLowerCase() === normalizedEmail
+  );
+
+  const total = tasksForEmployee.length;
+  const done = tasksForEmployee.filter((t) => {
+    const completed = t.completed ?? t.is_completed;
+    return !!completed;
+  }).length;
+  const progress = total > 0 ? Math.round((done / total) * 100) : 0;
+  const status = progress >= 100 ? 'COMPLETED' : progress > 0 ? 'IN_PROGRESS' : 'PENDING';
+
+  const { data: employees, error: empError } = await bolticClient.records.findAll(EMPLOYEES_TABLE_NAME);
+  if (empError) {
+    throw new Error(empError.message || 'Failed to fetch employees for progress sync');
+  }
+
+  const employee = (employees || []).find((e) => {
+    const email = (e.personal_email || e.email || '').trim().toLowerCase();
+    return email === normalizedEmail;
+  });
+
+  if (employee?.id) {
+    await updateEmployee(employee.id, { progress, status });
+  }
+
+  return { progress, status };
+}
+
 async function updateTaskStatus(taskId, isCompleted) {
   if (!TASKS_TABLE_NAME) {
     throw new Error('TASKS_TABLE_NAME is not configured');
@@ -153,6 +194,12 @@ async function updateTaskStatus(taskId, isCompleted) {
   const normalizedStatus = (typeof data.status === 'string' && data.status.trim())
     ? data.status
     : (completed ? 'COMPLETED' : 'PENDING');
+  let syncedProgress = null;
+  try {
+    syncedProgress = await syncEmployeeProgress(data.employee_email);
+  } catch (err) {
+    console.error('⚠️  Failed to sync employee progress:', err.message);
+  }
   return {
     id: data.id || data._id,
     employeeEmail: data.employee_email,
@@ -163,10 +210,13 @@ async function updateTaskStatus(taskId, isCompleted) {
     status: normalizedStatus,
     isCompleted: !!completed,
     completedAt: data.completed_at || null,
+    progress: syncedProgress?.progress,
+    employeeStatus: syncedProgress?.status,
   };
 }
 
 module.exports = {
   getTasksForEmployee,
   updateTaskStatus,
+  syncEmployeeProgress,
 };

@@ -8,6 +8,8 @@ import NewHireDashboard from './views/NewHireDashboard';
 import { Role, User } from './types';
 import { MOCK_EMPLOYEES, MOCK_HR, MOCK_MANAGER } from './constants';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const App: React.FC = () => {
   return (
     <BrowserRouter>
@@ -40,7 +42,7 @@ const MainApp: React.FC = () => {
     }
     try {
       const parsed = JSON.parse(saved) as { token: string; role: Role };
-      fetch('http://localhost:5000/api/auth/admin-verify', {
+      fetch(`${API_BASE}/api/auth/admin-verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${parsed.token}` },
         body: JSON.stringify({ token: parsed.token })
