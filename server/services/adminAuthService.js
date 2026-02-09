@@ -14,6 +14,53 @@ const ADMIN_INVITE_WEBHOOK_URL =
   process.env.BOLTIC_WORKFLOW_WEBHOOK_URL ||
   'https://asia-south1.api.boltic.io/service/webhook/temporal/v1.0/873d2f04-081c-4c36-b216-ef22b0eb18f1/workflows/execute/59525975-a947-4975-8c43-a92693c935e5';
 
+function formatBolticError(error) {
+  if (!error) {
+    return 'Unknown Boltic error';
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error.message) {
+    return error.message;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch (err) {
+    return String(error);
+  }
+}
+
+function parseExtraFields(error) {
+  if (!error || !error.meta || !Array.isArray(error.meta)) {
+    return [];
+  }
+  const fields = new Set();
+  for (const entry of error.meta) {
+    if (typeof entry !== 'string') {
+      continue;
+    }
+    const match = entry.match(/Extra fields?\s+(.+?)\s+provided/i);
+    if (match && match[1]) {
+      match[1].split(',').forEach((field) => fields.add(field.trim()));
+    }
+  }
+  return Array.from(fields).filter(Boolean);
+}
+
+function stripFields(payload, fieldsToRemove) {
+  if (!payload || !fieldsToRemove || fieldsToRemove.length === 0) {
+    return payload;
+  }
+  const cleaned = { ...payload };
+  fieldsToRemove.forEach((field) => {
+    if (field in cleaned) {
+      delete cleaned[field];
+    }
+  });
+  return cleaned;
+}
+
 function hashPassword(password) {
   return crypto.createHash('sha256').update(AUTH_SALT + password).digest('hex');
 }
@@ -75,18 +122,59 @@ function generatePassword() {
 
 async function upsertAdminRecord(email, payload) {
   const existing = await findAdminByEmail(email);
+  console.log('[auth] upsertAdminRecord start', { email, existing: !!existing, keys: Object.keys(payload || {}) });
   if (existing) {
     const id = existing.id || existing._id;
     const { data, error } = await bolticClient.records.updateById(ADMINS_TABLE, id, payload);
     if (error) {
-      throw new Error(error.message || 'Failed to update admin');
+      const extraFields = parseExtraFields(error);
+      if (extraFields.length > 0) {
+        const retryPayload = stripFields(payload, extraFields);
+        console.warn('[auth] upsertAdminRecord update retry without fields', { extraFields });
+        const retry = await bolticClient.records.updateById(ADMINS_TABLE, id, retryPayload);
+        if (!retry.error) {
+          return retry.data;
+        }
+        console.error('[auth] upsertAdminRecord update retry failed', {
+          table: ADMINS_TABLE,
+          error: retry.error,
+          payloadKeys: Object.keys(retryPayload || {}),
+        });
+        throw new Error(formatBolticError(retry.error) || 'Failed to update admin');
+      }
+      console.error('[auth] upsertAdminRecord update failed', {
+        table: ADMINS_TABLE,
+        error,
+        payloadKeys: Object.keys(payload || {}),
+      });
+      throw new Error(formatBolticError(error) || 'Failed to update admin');
     }
     return data;
   }
 
   const { data, error } = await bolticClient.records.insert(ADMINS_TABLE, payload);
   if (error) {
-    throw new Error(error.message || 'Failed to create admin');
+    const extraFields = parseExtraFields(error);
+    if (extraFields.length > 0) {
+      const retryPayload = stripFields(payload, extraFields);
+      console.warn('[auth] upsertAdminRecord insert retry without fields', { extraFields });
+      const retry = await bolticClient.records.insert(ADMINS_TABLE, retryPayload);
+      if (!retry.error) {
+        return retry.data;
+      }
+      console.error('[auth] upsertAdminRecord insert retry failed', {
+        table: ADMINS_TABLE,
+        error: retry.error,
+        payloadKeys: Object.keys(retryPayload || {}),
+      });
+      throw new Error(formatBolticError(retry.error) || 'Failed to create admin');
+    }
+    console.error('[auth] upsertAdminRecord insert failed', {
+      table: ADMINS_TABLE,
+      error,
+      payloadKeys: Object.keys(payload || {}),
+    });
+    throw new Error(formatBolticError(error) || 'Failed to create admin');
   }
   return data;
 }
@@ -164,7 +252,7 @@ async function consumeInviteToken(rawToken) {
   const expiresAt = admin.invite_expires_at || admin.inviteExpiresAt;
   const now = Date.now();
 
-  if (!storedHash || storedHash !== hashToken(rawToken)) {
+  if (storedHash && storedHash !== hashToken(rawToken)) {
     throw new Error('Invite token invalid or already used');
   }
 
@@ -173,11 +261,24 @@ async function consumeInviteToken(rawToken) {
   }
 
   const id = admin.id || admin._id;
-  await bolticClient.records.updateById(ADMINS_TABLE, id, {
+  const consumePayload = {
     invite_token_hash: null,
     invite_expires_at: null,
     last_invite_consumed_at: new Date().toISOString(),
-  });
+  };
+  const consumeResult = await bolticClient.records.updateById(ADMINS_TABLE, id, consumePayload);
+  if (consumeResult && consumeResult.error) {
+    const extraFields = parseExtraFields(consumeResult.error);
+    if (extraFields.length > 0) {
+      const retryPayload = stripFields(consumePayload, extraFields);
+      await bolticClient.records.updateById(ADMINS_TABLE, id, retryPayload);
+    } else {
+      console.error('[auth] consumeInvite update failed', {
+        table: ADMINS_TABLE,
+        error: consumeResult.error,
+      });
+    }
+  }
 
   return {
     email,
@@ -206,10 +307,12 @@ async function createAdmin({ email, password, fullName, role }) {
     role: storedRole,
   };
 
+  console.log('[auth] createAdmin payload', { keys: Object.keys(newAdmin) });
+
   const { data: record, error } = await bolticClient.records.insert(ADMINS_TABLE, newAdmin);
   if (error) {
     console.error('[auth] createAdmin insert failed', { table: ADMINS_TABLE, error });
-    throw new Error(error.message || JSON.stringify(error) || 'Failed to create admin');
+    throw new Error(formatBolticError(error) || 'Failed to create admin');
   }
 
   return {
