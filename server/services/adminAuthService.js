@@ -205,7 +205,9 @@ async function issueHrInvite({ email, fullName, role = 'HR Admin' }) {
     invite_expires_at: expiresAt,
   });
 
-  const inviteUrl = `${INVITE_FRONTEND_URL.replace(/\/$/, '')}/?invite=${encodeURIComponent(inviteToken)}`;
+  const inviteUrl =
+  `${INVITE_FRONTEND_URL.replace(/\/$/, '')}/invite?invite=${encodeURIComponent(inviteToken)}`;
+
 
   if (ADMIN_INVITE_WEBHOOK_URL) {
     try {
