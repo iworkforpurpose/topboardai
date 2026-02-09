@@ -108,26 +108,26 @@ const NON_TECH_TASKS: Task[] = [
 
 export const MOCK_HR: HR = {
   id: 'hr1',
-  name: 'Sarah Connor',
-  email: 'sarah@boltic.io',
+  name: 'HR Admin',
+  email: 'hr@topboardai.com',
   role: 'HR',
-  avatarUrl: 'https://picsum.photos/200/200?random=1',
+  avatarUrl: '',
 };
 
 export const MOCK_MANAGER: Manager = {
   id: 'm1',
-  name: 'John Anderson',
-  email: 'john@boltic.io',
+  name: 'Manager',
+  email: 'manager@topboardai.com',
   role: 'MANAGER',
   department: 'Engineering',
-  avatarUrl: 'https://picsum.photos/200/200?random=2',
+  avatarUrl: '',
 };
 
 export const MOCK_EMPLOYEES: Employee[] = [
   {
     id: 'e1',
     name: 'Neo Thomas',
-    email: 'neo@boltic.io',
+    email: 'neo@topboardai.com',
     role: 'EMPLOYEE',
     managerId: 'm1',
     department: 'Engineering',
@@ -148,7 +148,7 @@ export const MOCK_EMPLOYEES: Employee[] = [
   {
     id: 'e2',
     name: 'Trinity Moss',
-    email: 'trinity@boltic.io',
+    email: 'trinity@topboardai.com',
     role: 'EMPLOYEE',
     managerId: 'm1',
     department: 'Sales',
@@ -169,7 +169,7 @@ export const MOCK_EMPLOYEES: Employee[] = [
   {
     id: 'e3',
     name: 'Morpheus Lawrence',
-    email: 'morpheus@boltic.io',
+    email: 'morpheus@topboardai.com',
     role: 'EMPLOYEE',
     managerId: 'm1',
     department: 'Marketing',
@@ -189,8 +189,8 @@ export const MOCK_EMPLOYEES: Employee[] = [
   },
 ];
 
-export const BOLTIC_KNOWLEDGE_BASE = [
-  { keywords: ['wifi', 'internet', 'password'], response: "The office WiFi network is 'Boltic_Secure'. The password is 'WelcomeToBoltic2024!'." },
+export const TOPBOARDAI_KNOWLEDGE_BASE = [
+  { keywords: ['wifi', 'internet', 'password'], response: "The office WiFi network is 'TopboardAI_Secure'. The password is 'WelcomeToTopboard2024!'." },
   { keywords: ['salary', 'pay', 'payroll'], response: "Salaries are processed on the 25th of every month. Payslips are available in the HR portal." },
   { keywords: ['leave', 'vacation', 'holiday'], response: "You are entitled to 20 days of paid leave per year. Requests should be submitted via the HR portal." },
   { keywords: ['manager', 'contact'], response: "Your manager's contact details are listed in your dashboard header." },

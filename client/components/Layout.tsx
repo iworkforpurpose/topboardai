@@ -19,17 +19,14 @@ const Layout: React.FC<LayoutProps> = ({ children, user, role, onLogout, current
       case 'HR':
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'employees', label: 'All Employees', icon: Users },
-          { id: 'new-hire', label: 'New Hire', icon: UserPlus },
         ];
       case 'MANAGER':
         return [
-          { id: 'team', label: 'Team Overview', icon: Users },
-          { id: 'progress', label: 'Progress Tracking', icon: LayoutDashboard },
+          { id: 'managerdashboard', label: 'Team Overview', icon: Users },
         ];
       case 'EMPLOYEE':
         return [
-          { id: 'tasks', label: 'My Tasks', icon: LayoutDashboard },
+          { id: 'employeedashboard', label: 'My Tasks', icon: LayoutDashboard },
         ];
       default:
         return [];
@@ -41,15 +38,23 @@ const Layout: React.FC<LayoutProps> = ({ children, user, role, onLogout, current
       {/* Sidebar */}
       <aside className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-gray-200 flex-shrink-0 sticky top-0 md:h-screen z-10">
         <div className="p-6 flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-lg">B</span>
+          <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-md">
+            <span className="text-white font-bold text-lg">T</span>
           </div>
-          <span className="font-bold text-xl text-slate-800">Boltic</span>
+          <span className="font-bold text-xl text-slate-900">TopboardAI</span>
         </div>
 
         <div className="px-4 py-2">
           <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 mb-6">
-            <img src={user?.avatarUrl} alt={user?.name} className="w-10 h-10 rounded-full object-cover" />
+            <img
+              src={user?.avatarUrl || (role === 'MANAGER'
+                ? 'https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=200&q=80'
+                : role === 'HR'
+                  ? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=200&q=80'
+                  : 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=200&q=80')}
+              alt={user?.name}
+              className="w-10 h-10 rounded-full object-cover border border-white shadow-sm"
+            />
             <div className="overflow-hidden">
               <p className="font-medium text-sm text-slate-900 truncate">{user?.name}</p>
               <p className="text-xs text-slate-500 capitalize">{role.toLowerCase()}</p>
@@ -66,7 +71,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, role, onLogout, current
                   onClick={() => onChangeView(item.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-indigo-50 text-indigo-700'
+                      ? 'bg-orange-50 text-orange-600'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >

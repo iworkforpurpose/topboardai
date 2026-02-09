@@ -1,4 +1,25 @@
-const { createEmployee, triggerWelcomeWorkflow } = require('../services/employeeService');
+const { createEmployee, triggerWelcomeWorkflow, getAllEmployees, updateEmployee } = require('../services/employeeService');
+
+/**
+ * GET /api/employees
+ * Get all employees
+ */
+async function getEmployees(req, res) {
+    try {
+        const employees = await getAllEmployees();
+        
+        res.status(200).json({
+            success: true,
+            data: employees
+        });
+    } catch (error) {
+        console.error('Error in getEmployees:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to fetch employees'
+        });
+    }
+}
 
 /**
  * POST /api/new-hire
@@ -71,6 +92,53 @@ async function createNewHire(req, res) {
     }
 }
 
+/**
+ * POST /api/verify-token
+ * Verify employee onboarding token
+ */
+async function verifyEmployeeToken(req, res) {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                message: 'Token is required'
+            });
+        }
+
+        const { verifyToken } = require('../services/employeeService');
+        const employee = await verifyToken(token);
+
+        if (!employee) {
+            return res.status(404).json({
+                success: false,
+                message: 'Invalid token. Please check your email for the correct token.'
+            });
+        }
+
+        if (employee.expired) {
+            return res.status(401).json({
+                success: false,
+                message: 'Token has expired. Please contact HR for a new token.'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: employee
+        });
+    } catch (error) {
+        console.error('Error in verifyEmployeeToken:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to verify token'
+        });
+    }
+}
+
 module.exports = {
-    createNewHire
+    createNewHire,
+    getEmployees,
+    verifyEmployeeToken
 };

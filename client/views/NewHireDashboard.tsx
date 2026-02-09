@@ -1,247 +1,549 @@
 import React, { useState, useEffect } from 'react';
-import { CheckSquare, ExternalLink, Calendar, Trophy, ChevronRight, Gift, ArrowRight, Laptop, Briefcase, Code } from 'lucide-react';
-import { Task, Employee, TaskCategory } from '../types';
-import { MOCK_EMPLOYEES } from '../constants';
-import BolticChat from '../components/BolticChat';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { 
+  CheckSquare, 
+  ChevronRight, 
+  Laptop, 
+  Briefcase, 
+  Code, 
+  Clock, 
+  ArrowRight, 
+  Lock,
+  Award,
+  MessageCircle,
+  Calendar,
+  BookOpen,
+  Target,
+  CheckCircle2
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+interface Task {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  isCompleted: boolean;
+  dueDate?: string;
+  link?: string;
+}
+
+// Minimal onboarding checklist; ideally sourced from onboarding_tasks table when backend endpoint is ready
+const HARDCODED_TASKS: Task[] = [
+  {
+    id: 'placeholder-1',
+    title: 'Did you receive a laptop?',
+    description: 'Confirm hardware delivery from IT.',
+    category: 'Logistics',
+    isCompleted: false,
+  },
+  {
+    id: 'placeholder-2',
+    title: 'Did you receive company login details?',
+    description: 'Confirm you got your company email and SSO credentials.',
+    category: 'Access',
+    isCompleted: false,
+  },
+  {
+    id: 'placeholder-3',
+    title: 'Did you receive Slack invitation and complete setup?',
+    description: 'Join Slack and finish profile setup.',
+    category: 'Access',
+    isCompleted: false,
+  },
+];
+
 const NewHireDashboard: React.FC = () => {
-  // Simulate logged in user
-  const [user, setUser] = useState<Employee>(MOCK_EMPLOYEES[0]);
-  const [tasks, setTasks] = useState<Task[]>(user.tasks);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [token, setToken] = useState('');
+  const [employeeName, setEmployeeName] = useState('');
+  const [employeeData, setEmployeeData] = useState<any>(null);
+  const [tasks, setTasks] = useState<Task[]>(HARDCODED_TASKS);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  const [error, setError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const pendingTasks = tasks.filter(t => !t.isCompleted).length;
-  const progress = Math.round(((tasks.length - pendingTasks) / tasks.length) * 100);
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setToken('');
+    setEmployeeName('');
+    setEmployeeData(null);
+    setTasks(HARDCODED_TASKS);
+    sessionStorage.removeItem('employeeData');
+    navigate('/employeelogin');
+  };
 
-  const handleTaskToggle = (taskId: string) => {
-    const updatedTasks = tasks.map(t => 
-      t.id === taskId ? { ...t, isCompleted: !t.isCompleted } : t
-    );
-    setTasks(updatedTasks);
-    
-    // Check if task completed
-    const task = updatedTasks.find(t => t.id === taskId);
-    if (task?.isCompleted) {
-        // Trigger small confetti
-        confetti({
-            particleCount: 50,
-            spread: 60,
-            origin: { y: 0.7 }
-        });
+  const loadTasks = async (employeeEmail: string) => {
+    setIsLoadingTasks(true);
+    try {
+      const response = await fetch(`http://localhost:5000/api/tasks?employeeEmail=${encodeURIComponent(employeeEmail)}`);
+      const result = await response.json();
+      if (result.success && Array.isArray(result.data)) {
+        setTasks(result.data.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          category: t.category,
+          isCompleted: !!t.isCompleted,
+        })));
+      } else {
+        setTasks(HARDCODED_TASKS);
+      }
+    } catch (err) {
+      console.error('Task fetch error', err);
+      setTasks(HARDCODED_TASKS);
+    } finally {
+      setIsLoadingTasks(false);
+    }
+  };
+
+  const handleTokenSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsVerifying(true);
+
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/verify-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token: token.trim() })
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setIsAuthenticated(true);
+        setEmployeeName(result.data.fullName);
+        setEmployeeData(result.data);
+        setError('');
+        sessionStorage.setItem('employeeData', JSON.stringify(result.data));
+        await loadTasks(result.data.email);
+        navigate('/employeelogin');
+      } else {
+        setError(result.message || 'Invalid token. Please check your email.');
+      }
+    } catch (err) {
+      console.error('Token verification error:', err);
+      setError('Failed to verify token. Please try again.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const completedTasks = tasks.filter(t => t.isCompleted).length;
+  const totalTasks = tasks.length;
+  const progress = Math.round((completedTasks / totalTasks) * 100);
+  const pendingTasks = tasks.filter(t => !t.isCompleted);
+  const completedTasksList = tasks.filter(t => t.isCompleted);
+
+  const handleTaskToggle = async (taskId: string) => {
+    const current = tasks.find(t => t.id === taskId);
+    const nextCompleted = !current?.isCompleted;
+
+    setTasks(tasks.map(t => t.id === taskId ? { ...t, isCompleted: nextCompleted } : t));
+
+    try {
+      await fetch(`http://localhost:5000/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isCompleted: nextCompleted }),
+      });
+    } catch (err) {
+      console.error('Task update failed', err);
+    }
+
+    if (nextCompleted) {
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.7 }
+      });
     }
   };
 
   useEffect(() => {
-    // If all tasks complete
-    if (pendingTasks === 0) {
-        setTimeout(() => {
-            confetti({
-                particleCount: 150,
-                spread: 100,
-                origin: { y: 0.6 }
-            });
-        }, 500);
+    if (completedTasks === totalTasks && isAuthenticated && completedTasks > 0) {
+      setTimeout(() => {
+        confetti({
+          particleCount: 150,
+          spread: 100,
+          origin: { y: 0.6 }
+        });
+      }, 500);
     }
-  }, [pendingTasks]);
+  }, [completedTasks, totalTasks, isAuthenticated]);
 
-  const taskGroups: Record<TaskCategory, Task[]> = {
-    'Pre-boarding': tasks.filter(t => t.category === 'Pre-boarding'),
-    'Orientation': tasks.filter(t => t.category === 'Orientation'),
-    'Role Specific': tasks.filter(t => t.category === 'Role Specific'),
-  };
+  useEffect(() => {
+    const stored = sessionStorage.getItem('employeeData');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setIsAuthenticated(true);
+      setEmployeeName(parsed.fullName);
+      setEmployeeData(parsed);
+      loadTasks(parsed.email).catch(() => setTasks(HARDCODED_TASKS));
+    } else if (location.pathname === '/tasks' || location.pathname === '/employeedashboard') {
+      navigate('/employeelogin', { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
-  const getCategoryIcon = (category: TaskCategory) => {
+  const getCategoryIcon = (category: string) => {
     switch (category) {
-        case 'Pre-boarding': return <Laptop size={20} className="text-indigo-600" />;
-        case 'Orientation': return <Briefcase size={20} className="text-indigo-600" />;
-        case 'Role Specific': return <Code size={20} className="text-indigo-600" />;
+      case 'Setup': return <Laptop size={18} className="text-orange-500" />;
+      case 'Orientation': return <Briefcase size={18} className="text-blue-500" />;
+      case 'Technical': return <Code size={18} className="text-purple-500" />;
+      case 'Meetings': return <Calendar size={18} className="text-green-500" />;
+      default: return <BookOpen size={18} className="text-gray-500" />;
     }
   };
 
-  const getCategoryTitle = (category: TaskCategory) => {
+  const getCategoryColor = (category: string) => {
     switch (category) {
-        case 'Pre-boarding': return 'Hardware & Essentials';
-        case 'Orientation': return 'Day 1 - Orientation';
-        case 'Role Specific': return `${user.roleType === 'TECH' ? 'Engineering' : 'Department'} Onboarding`;
+      case 'Setup': return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'Orientation': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'Technical': return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'Meetings': return 'bg-green-50 text-green-700 border-green-200';
+      default: return 'bg-gray-50 text-gray-700 border-gray-200';
     }
   };
 
+  // Token Input Screen
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-blue-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg mb-4">
+                <Lock size={28} className="text-white" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Fynd! 👋</h1>
+              <p className="text-gray-600">Enter your onboarding token to get started</p>
+            </div>
+
+            <form onSubmit={handleTokenSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Onboarding Token
+                </label>
+                <input
+                  type="text"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Paste your token here"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all outline-none font-mono text-sm"
+                  required
+                />
+                {error && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                    <span>⚠️</span> {error}
+                  </p>
+                )}
+                <p className="mt-2 text-xs text-gray-500">
+                  Check your email for the token sent by HR at 10:00 AM
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isVerifying || !token.trim()}
+                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold py-3 rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isVerifying ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    Access Dashboard <ArrowRight size={18} />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-6 p-4 bg-orange-50 rounded-lg border border-orange-100">
+              <p className="text-xs text-orange-800">
+                <strong>Need help?</strong> Contact HR at hr@fynd.com
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main Dashboard
   return (
-    <div className="relative min-h-[80vh] pb-12">
-      {/* Header Banner */}
-      <div className="bg-slate-900 rounded-2xl p-8 text-white shadow-xl mb-8 relative overflow-hidden">
-        <div className="relative z-10 grid md:grid-cols-2 gap-8 items-center">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">F</span>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Fynd Onboarding</h1>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-medium text-gray-900">{employeeName}</p>
+                <p className="text-xs text-gray-500">New Employee</p>
+              </div>
+              <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                <span className="text-orange-600 font-semibold text-sm">
+                  {employeeName.split(' ').map(n => n[0]).join('')}
+                </span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="ml-2 px-3 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {/* Welcome Banner */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-start gap-3 mb-2">
+            <span className="text-3xl">✨</span>
             <div>
-                <h1 className="text-4xl font-bold mb-3 tracking-tight">Welcome aboard, {user.name.split(' ')[0]}! 👋</h1>
-                <p className="text-slate-300 text-lg leading-relaxed max-w-lg">
-                    We've prepared a personalized {user.roleType === 'TECH' ? 'Engineering' : ''} onboarding plan for you.
-                </p>
-                
-                <div className="mt-8">
-                    <div className="flex justify-between text-sm font-medium mb-2 text-slate-300">
-                        <span>Onboarding Progress</span>
-                        <span>{progress}%</span>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-3 backdrop-blur-sm">
-                        <div 
-                            className="bg-indigo-500 h-3 rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
-                            style={{ width: `${progress}%` }}
-                        ></div>
-                    </div>
-                </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                Welcome to Fynd, {employeeName.split(' ')[0]}! 👋
+              </h2>
+              <p className="text-gray-600 mt-1">
+                We're excited to have you on board! Let's get you started with your onboarding journey.
+              </p>
             </div>
-            
-            {/* Right side of banner - Next Action */}
-            <div className="hidden md:block">
-                 <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/10">
-                    <h3 className="text-indigo-300 font-semibold text-sm uppercase tracking-wider mb-2">Up Next</h3>
-                    <div className="flex items-start gap-4">
-                        <div className="p-3 bg-indigo-600 rounded-lg text-white">
-                            <Calendar size={24} />
-                        </div>
-                        <div>
-                            <h4 className="text-xl font-bold">Team Intro Meeting</h4>
-                            <p className="text-slate-300 text-sm mt-1">Today, 2:00 PM • Google Meet</p>
-                        </div>
-                    </div>
-                 </div>
+          </div>
+          
+          {employeeData && (
+            <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Start Date:</span>
+                <span>{new Date(employeeData.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Role:</span>
+                <span>{employeeData.role}</span>
+              </div>
             </div>
+          )}
         </div>
-        
-        {/* Decorative Circles */}
-        <div className="absolute top-0 right-0 -mt-20 -mr-20 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-64 h-64 bg-purple-600/20 rounded-full blur-3xl"></div>
-      </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        
-        {/* Task List (Left 2 cols) */}
-        <div className="lg:col-span-2 space-y-8">
-            {(Object.keys(taskGroups) as TaskCategory[]).map((category) => {
-                const categoryTasks = taskGroups[category];
-                if (categoryTasks.length === 0) return null;
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Content - Tasks */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Progress Card */}
+            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg">
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold mb-1">Your Onboarding Progress</h3>
+                  <p className="text-orange-100 text-sm">Keep going! You're doing great ⭐</p>
+                </div>
+                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                  <Target size={24} className="text-white" />
+                </div>
+              </div>
 
-                return (
-                    <div key={category}>
-                        <div className="flex items-center gap-3 mb-4">
-                             <div className="p-2 bg-indigo-50 rounded-lg">
-                                {getCategoryIcon(category)}
-                             </div>
-                             <h2 className="text-xl font-bold text-slate-800">{getCategoryTitle(category)}</h2>
-                             <span className="h-px flex-1 bg-gray-200"></span>
-                        </div>
-                        
-                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                            <div className="divide-y divide-gray-100">
-                                {categoryTasks.map(task => (
-                                    <div 
-                                        key={task.id} 
-                                        className={`p-5 flex gap-5 transition-all group ${
-                                            task.isCompleted ? 'bg-gray-50/50 opacity-75' : 'hover:bg-slate-50'
-                                        }`}
-                                    >
-                                        <button 
-                                            onClick={() => handleTaskToggle(task.id)}
-                                            className={`mt-1 w-6 h-6 rounded border-2 flex items-center justify-center shrink-0 transition-all duration-200 ${
-                                                task.isCompleted 
-                                                    ? 'bg-indigo-600 border-indigo-600 text-white scale-100' 
-                                                    : 'border-gray-300 hover:border-indigo-400 text-transparent scale-95 hover:scale-100'
-                                            }`}
-                                        >
-                                            <CheckSquare size={14} fill="currentColor" />
-                                        </button>
-                                        
-                                        <div className="flex-1">
-                                            <div className="flex justify-between items-start">
-                                                <h3 className={`font-semibold text-lg text-slate-900 ${task.isCompleted ? 'line-through text-slate-400' : ''}`}>
-                                                    {task.title}
-                                                </h3>
-                                                {task.isCompleted && <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded">COMPLETED</span>}
-                                            </div>
-                                            
-                                            <p className={`text-slate-500 mt-1 leading-relaxed ${task.isCompleted ? 'text-slate-400' : ''}`}>
-                                                {task.description}
-                                            </p>
-                                            
-                                            {!task.isCompleted && task.link && (
-                                                <div className="mt-3">
-                                                    <a href={task.link} className="inline-flex items-center gap-2 text-sm font-medium text-white bg-indigo-600 px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200">
-                                                        Start Task <ArrowRight size={14} />
-                                                    </a>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm font-medium mb-2">
+                  <span>Overall Completion</span>
+                  <span className="text-2xl font-bold">{progress}%</span>
+                </div>
+                <div className="w-full bg-white/20 rounded-full h-3 backdrop-blur-sm overflow-hidden">
+                  <div 
+                    className="bg-white h-3 rounded-full transition-all duration-500 ease-out shadow-lg" 
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 mt-6">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Target size={16} />
+                    <span className="text-xs font-medium">Tasks</span>
+                  </div>
+                  <p className="text-2xl font-bold">{completedTasks}/{totalTasks}</p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Calendar size={16} />
+                    <span className="text-xs font-medium">Days Left</span>
+                  </div>
+                  <p className="text-2xl font-bold">28</p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Award size={16} />
+                    <span className="text-xs font-medium">Completed</span>
+                  </div>
+                  <p className="text-2xl font-bold">{progress}%</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Pending Tasks */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-gray-900">
+                    Pending Tasks ({pendingTasks.length})
+                  </h3>
+                </div>
+              </div>
+
+              <div className="divide-y divide-gray-100">
+                {pendingTasks.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                      <Award size={32} className="text-green-600" />
+                    </div>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2">All tasks completed! 🎉</h4>
+                    <p className="text-gray-600">You've finished your onboarding journey. Welcome to the team!</p>
+                  </div>
+                ) : (
+                  pendingTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="p-4 hover:bg-gray-50 transition-colors cursor-pointer group"
+                      onClick={() => handleTaskToggle(task.id)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <button
+                          className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 transition-all ${
+                            task.isCompleted
+                              ? 'bg-orange-500 border-orange-500'
+                              : 'border-gray-300 group-hover:border-orange-500'
+                          }`}
+                        >
+                          {task.isCompleted && (
+                            <CheckCircle2 size={16} className="text-white" />
+                          )}
+                        </button>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="font-medium text-gray-900 group-hover:text-orange-600 transition-colors">
+                              {task.title}
+                            </h4>
+                            <span className={`flex-shrink-0 text-xs px-2 py-1 rounded-md border ${getCategoryColor(task.category)}`}>
+                              {task.category}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{task.description}</p>
+                          {task.dueDate && (
+                            <div className="flex items-center gap-1.5 mt-2 text-xs text-orange-600">
+                              <Clock size={14} />
+                              <span className="font-medium">{task.dueDate}</span>
                             </div>
+                          )}
                         </div>
+
+                        <ChevronRight size={20} className="text-gray-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
                     </div>
-                );
-            })}
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Completed Tasks */}
+            {completedTasksList.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-bold text-gray-900">
+                    Completed ({completedTasksList.length})
+                  </h3>
+                </div>
+
+                <div className="divide-y divide-gray-100">
+                  {completedTasksList.map((task) => (
+                    <div
+                      key={task.id}
+                      className="p-4 opacity-60 hover:opacity-100 transition-opacity"
+                    >
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900 line-through">{task.title}</h4>
+                          <p className="text-sm text-gray-600 mt-1">{task.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sidebar - Quick Actions */}
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-bold text-gray-900">Quick Actions</h3>
+              </div>
+              
+              <div className="p-4 space-y-3">
+                <button className="w-full flex items-center gap-3 p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors text-left group">
+                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Calendar size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm">Schedule 1:1</p>
+                    <p className="text-xs text-gray-600">Meet with your manager</p>
+                  </div>
+                  <ChevronRight size={18} className="text-gray-400 group-hover:text-blue-500 transition-colors" />
+                </button>
+
+                <button className="w-full flex items-center gap-3 p-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors text-left group">
+                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <MessageCircle size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm">Team Chat</p>
+                    <p className="text-xs text-gray-600">Connect with colleagues</p>
+                  </div>
+                  <ChevronRight size={18} className="text-gray-400 group-hover:text-green-500 transition-colors" />
+                </button>
+
+                <button className="w-full flex items-center gap-3 p-3 rounded-lg bg-purple-50 hover:bg-purple-100 transition-colors text-left group">
+                  <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Calendar size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm">View Calendar</p>
+                    <p className="text-xs text-gray-600">Check your schedule</p>
+                  </div>
+                  <ChevronRight size={18} className="text-gray-400 group-hover:text-purple-500 transition-colors" />
+                </button>
+
+                <button className="w-full flex items-center gap-3 p-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors text-left group">
+                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <BookOpen size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm">Resources</p>
+                    <p className="text-xs text-gray-600">Browse documentation</p>
+                  </div>
+                  <ChevronRight size={18} className="text-gray-400 group-hover:text-orange-500 transition-colors" />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-
-        {/* Sidebar Widgets (Right col) */}
-        <div className="space-y-6">
-            {/* Rewards Card */}
-            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl border border-orange-100 shadow-sm p-6 relative overflow-hidden">
-                <div className="flex items-center gap-3 mb-4 relative z-10">
-                    <div className="p-2 bg-white rounded-lg shadow-sm text-yellow-500">
-                         <Trophy size={24} />
-                    </div>
-                    <h3 className="font-bold text-slate-900">Swag Unlocks</h3>
-                </div>
-                <p className="text-slate-600 text-sm mb-4 relative z-10">
-                    Complete all "Orientation" tasks to unlock your personalized company swag box! 🎁
-                </p>
-                <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-white/50 flex items-center justify-between relative z-10">
-                    <span className="text-sm font-medium text-slate-700">Progress</span>
-                    <span className="text-xs font-bold bg-slate-800 text-white px-2 py-1 rounded-full">{progress}%</span>
-                </div>
-                {/* Decor */}
-                <Gift className="absolute -bottom-4 -right-4 text-orange-200 opacity-50" size={100} />
-            </div>
-
-            {/* Quick Links */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                <h3 className="font-bold text-slate-900 mb-4">Quick Resources</h3>
-                <ul className="space-y-3">
-                    <li>
-                        <a href="#" className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors text-slate-600 group">
-                            <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-colors"><ExternalLink size={14} /></span>
-                            <span className="text-sm font-medium">Employee Handbook</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="#" className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors text-slate-600 group">
-                            <span className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center group-hover:bg-green-100 transition-colors"><ExternalLink size={14} /></span>
-                            <span className="text-sm font-medium">IT Support Portal</span>
-                        </a>
-                    </li>
-                </ul>
-            </div>
-
-            {/* AI Helper Teaser */}
-            <div className="bg-indigo-900 rounded-xl p-6 text-white relative overflow-hidden group cursor-pointer transition-transform hover:scale-[1.02]">
-                <div className="relative z-10">
-                    <h3 className="font-bold mb-2 text-lg">Questions?</h3>
-                    <p className="text-indigo-200 text-sm mb-4">
-                        "What is the wifi password?"<br/>"When is payday?"
-                    </p>
-                    <div className="flex items-center gap-2 text-sm font-medium text-white/90 group-hover:text-white">
-                        Ask Boltic Assistant <ChevronRight size={16} />
-                    </div>
-                </div>
-                {/* Decoration */}
-                <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-1/4 translate-y-1/4">
-                    <svg width="120" height="120" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
-                    </svg>
-                </div>
-            </div>
-        </div>
-      </div>
-
-      <BolticChat />
+      </main>
     </div>
   );
 };

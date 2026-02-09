@@ -1,16 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Bot, User } from 'lucide-react';
 import { ChatMessage } from '../types';
-import { BOLTIC_KNOWLEDGE_BASE } from '../constants';
+import { TOPBOARDAI_KNOWLEDGE_BASE } from '../constants';
 
-const BolticChat: React.FC = () => {
+const TopboardAIChat: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       sender: 'bot',
-      text: "Hi! I'm the Boltic AI Onboarding Assistant. Ask me anything about your first week, policies, or setup!",
+      text: "Hi! I'm the TopboardAI Onboarding Assistant. Ask me anything about your first week, policies, or setup!",
       timestamp: new Date(),
     },
   ]);
@@ -46,7 +46,7 @@ const BolticChat: React.FC = () => {
       const lowerInput = userMsg.text.toLowerCase();
       let responseText = "I'm not sure about that. Please contact HR for specific inquiries, or try asking about WiFi, Salary, or Leave policies.";
       
-      const found = BOLTIC_KNOWLEDGE_BASE.find(kb => 
+      const found = TOPBOARDAI_KNOWLEDGE_BASE.find(kb => 
         kb.keywords.some(k => lowerInput.includes(k))
       );
 
@@ -75,14 +75,14 @@ const BolticChat: React.FC = () => {
         }`}
       >
         {/* Header */}
-        <div className="bg-indigo-600 p-4 flex justify-between items-center">
+        <div className="bg-orange-600 p-4 flex justify-between items-center">
           <div className="flex items-center gap-2 text-white">
             <div className="p-1 bg-white/20 rounded-lg">
               <Bot size={20} />
             </div>
             <div>
-              <h3 className="font-semibold text-sm">Boltic Assistant</h3>
-              <p className="text-xs text-indigo-100">Always here to help</p>
+              <h3 className="font-semibold text-sm">TopboardAI Assistant</h3>
+              <p className="text-xs text-orange-100">Always here to help</p>
             </div>
           </div>
           <button 
@@ -104,7 +104,7 @@ const BolticChat: React.FC = () => {
             >
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                  msg.sender === 'user' ? 'bg-indigo-100 text-indigo-600' : 'bg-green-100 text-green-600'
+                  msg.sender === 'user' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'
                 }`}
               >
                 {msg.sender === 'user' ? <User size={14} /> : <Bot size={14} />}
@@ -112,7 +112,7 @@ const BolticChat: React.FC = () => {
               <div
                 className={`max-w-[80%] p-3 rounded-2xl text-sm ${
                   msg.sender === 'user'
-                    ? 'bg-indigo-600 text-white rounded-tr-none'
+                    ? 'bg-orange-600 text-white rounded-tr-none'
                     : 'bg-white border border-gray-100 text-gray-700 rounded-tl-none shadow-sm'
                 }`}
               >
@@ -149,12 +149,12 @@ const BolticChat: React.FC = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask about wifi, salary..."
-              className="flex-1 bg-slate-100 border-0 rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="flex-1 bg-slate-100 border-0 rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
             />
             <button
               type="submit"
               disabled={!input.trim()}
-              className="p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-2 bg-orange-600 text-white rounded-full hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Send size={16} />
             </button>
@@ -166,7 +166,7 @@ const BolticChat: React.FC = () => {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 pointer-events-auto ${
-          isOpen ? 'bg-gray-200 text-gray-600 rotate-90' : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105'
+          isOpen ? 'bg-gray-200 text-gray-600 rotate-90' : 'bg-orange-600 text-white hover:bg-orange-700 hover:scale-105'
         }`}
       >
         {isOpen ? <X size={24} /> : <MessageCircle size={28} />}
@@ -175,4 +175,4 @@ const BolticChat: React.FC = () => {
   );
 };
 
-export default BolticChat;
+export default TopboardAIChat;

@@ -14,7 +14,19 @@ app.get('/health', (req, res) => {
     res.json({ status: 'OK', message: 'Server is running' });
 });
 
-// Routes
+// Routes - Organized by feature
+const hrRoutes = require('./routes/hrRoutes');
+const authRoutes = require('./routes/authRoutes');
+const managerRoutes = require('./routes/managerRoutes');
+const taskRoutes = require('./routes/taskRoutes');
+
+// Mount routes with proper prefixes
+app.use('/api/hr', hrRoutes);           // HR Admin endpoints
+app.use('/api/auth', authRoutes);       // Authentication endpoints
+app.use('/api/manager', managerRoutes); // Manager endpoints
+app.use('/api/tasks', taskRoutes);      // Onboarding tasks
+
+// Legacy route for backward compatibility (can be removed later)
 const employeeRoutes = require('./routes/employeeRoutes');
 app.use('/api', employeeRoutes);
 
