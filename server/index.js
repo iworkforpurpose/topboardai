@@ -14,6 +14,11 @@ app.get('/health', (req, res) => {
     res.json({ status: 'OK', message: 'Server is running' });
 });
 
+// Root route for platform probes
+app.get('/', (req, res) => {
+    res.send('TopboardAI backend is running');
+});
+
 // Routes - Organized by feature
 const hrRoutes = require('./routes/hrRoutes');
 const authRoutes = require('./routes/authRoutes');
