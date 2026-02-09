@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, AlertCircle, CheckCircle2, Clock, MoreHorizontal, RefreshCw, Zap, Server, Mail, Slack, Database, Briefcase, Code } from 'lucide-react';
+import { Plus, Search, AlertCircle, CheckCircle2, Clock, MoreHorizontal, RefreshCw, Zap, Server, Mail, Slack, Database, Briefcase, Code, Lock } from 'lucide-react';
 import { Employee, OnboardingStatus } from '../types';
 import { MOCK_EMPLOYEES, COMMON_TASKS, TECH_TASKS, NON_TECH_TASKS } from '../constants';
 
@@ -541,15 +541,22 @@ const HRDashboard: React.FC<HRDashboardProps> = ({ currentView }) => {
         </div>
 
         {/* Live Feed / Automation Log */}
-        <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden flex flex-col text-slate-300">
-          <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
+        <div className="relative bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden flex flex-col text-slate-300">
+          <div className="absolute inset-0 z-10 bg-slate-950/80 backdrop-blur-sm border border-slate-800/80 flex flex-col items-center justify-center text-center px-6">
+            <div className="flex items-center justify-center gap-2 text-slate-100 font-semibold text-sm">
+              <Lock size={16} /> Coming soon
+            </div>
+            <p className="text-xs text-slate-400 mt-2">Live automation logs will appear here once enabled.</p>
+          </div>
+
+          <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center opacity-30 blur-[1px] pointer-events-none">
             <h3 className="font-semibold text-white flex items-center gap-2">
               <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
               TopboardAI Automation Log
             </h3>
             <span className="text-xs font-mono text-slate-500">v2.1.0 running</span>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-xs">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-xs opacity-30 blur-[1px] pointer-events-none">
             <div className="flex gap-3">
               <span className="text-slate-500 shrink-0">10:42:15</span>
               <div>
@@ -581,7 +588,7 @@ const HRDashboard: React.FC<HRDashboardProps> = ({ currentView }) => {
               </div>
             </div>
           </div>
-          <div className="p-3 bg-slate-950 border-t border-slate-800 text-center">
+          <div className="p-3 bg-slate-950 border-t border-slate-800 text-center opacity-30 blur-[1px] pointer-events-none">
             <button className="text-xs text-orange-400 hover:text-orange-300">View Full Logs</button>
           </div>
         </div>
