@@ -1,0 +1,12 @@
+{
+  "name": "topboardai",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js",
+    "postinstall": "cd server && npm install"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
