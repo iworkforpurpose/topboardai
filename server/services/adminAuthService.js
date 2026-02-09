@@ -113,8 +113,6 @@ async function issueHrInvite({ email, fullName, role = 'HR Admin' }) {
     full_name: fullName,
     role,
     password_hash: passwordHash,
-    password: null,
-    password_plain: null,
     invite_token_hash: inviteTokenHash,
     invite_expires_at: expiresAt,
   });
