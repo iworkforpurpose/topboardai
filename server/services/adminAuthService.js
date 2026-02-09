@@ -202,8 +202,7 @@ async function createAdmin({ email, password, fullName, role }) {
   const storedRole = role === 'HR' ? 'HR Admin' : role;
   const newAdmin = {
     email,
-    // Store plaintext for workflow email and hash for auth
-    password: finalPassword,
+    // Store only hash in Boltic; plaintext is returned to caller but not persisted
     password_hash: hashPassword(finalPassword),
     full_name: fullName,
     role: storedRole,
