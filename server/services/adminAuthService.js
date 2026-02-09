@@ -8,7 +8,11 @@ const AUTH_SALT = process.env.ADMIN_AUTH_SALT || 'change_me';
 const INVITE_SECRET = process.env.ADMIN_INVITE_SECRET || process.env.ADMIN_JWT_SECRET || 'dev_admin_secret';
 const INVITE_TTL_MINUTES = Number(process.env.ADMIN_INVITE_TTL_MINUTES || 15);
 const INVITE_FRONTEND_URL = process.env.ADMIN_INVITE_FRONTEND_URL || process.env.FRONTEND_URL || 'https://topboardai.vercel.app';
-const BOLTIC_EMAIL_WEBHOOK_URL = process.env.BOLTIC_EMAIL_WEBHOOK_URL || process.env.BOLTIC_WORKFLOW_WEBHOOK_URL;
+const ADMIN_INVITE_WEBHOOK_URL =
+  process.env.BOLTIC_ADMIN_INVITE_WEBHOOK_URL ||
+  process.env.BOLTIC_EMAIL_WEBHOOK_URL ||
+  process.env.BOLTIC_WORKFLOW_WEBHOOK_URL ||
+  'https://asia-south1.api.boltic.io/service/webhook/temporal/v1.0/873d2f04-081c-4c36-b216-ef22b0eb18f1/workflows/execute/59525975-a947-4975-8c43-a92693c935e5';
 
 function hashPassword(password) {
   return crypto.createHash('sha256').update(AUTH_SALT + password).digest('hex');
@@ -117,19 +121,20 @@ async function issueHrInvite({ email, fullName, role = 'HR Admin' }) {
 
   const inviteUrl = `${INVITE_FRONTEND_URL.replace(/\/$/, '')}/?invite=${encodeURIComponent(inviteToken)}`;
 
-  if (BOLTIC_EMAIL_WEBHOOK_URL) {
+  if (ADMIN_INVITE_WEBHOOK_URL) {
     try {
-      await axios.post(BOLTIC_EMAIL_WEBHOOK_URL, {
-        template: 'hr_admin_invite',
-        to: email,
-        subject: 'You are invited as HR Admin',
-        data: {
+      await axios.post(
+        ADMIN_INVITE_WEBHOOK_URL,
+        {
+          template: 'hr_admin_invite',
           fullName,
+          email,
           role,
           inviteUrl,
           expiresAt,
         },
-      }, { timeout: 10000 });
+        { timeout: 10000 }
+      );
       console.log('[auth] invite email dispatched via Boltic webhook');
     } catch (err) {
       console.error('[auth] invite email dispatch failed', err.message);
