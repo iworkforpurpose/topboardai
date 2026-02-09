@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { authenticateAdmin, createAdmin } = require('../services/adminAuthService');
+const { authenticateAdmin, createAdmin, issueHrInvite, consumeInviteToken } = require('../services/adminAuthService');
 
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'dev_admin_secret';
 
@@ -40,12 +40,12 @@ async function verifyAdminToken(req, res) {
 
 async function addHrAdmin(req, res) {
   try {
-    const { email, password, fullName } = req.body;
+    const { email, fullName } = req.body;
     if (!email || !fullName) {
       return res.status(400).json({ success: false, message: 'Email and fullName are required' });
     }
-    const admin = await createAdmin({ email, password, fullName, role: 'HR' });
-    return res.status(201).json({ success: true, data: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role, password: admin.password } });
+    const invite = await issueHrInvite({ email, fullName, role: 'HR Admin' });
+    return res.status(201).json({ success: true, data: invite });
   } catch (err) {
     const message = err.message || 'Failed to create HR admin';
     const status = message.includes('already exists') ? 409 : 500;
@@ -54,6 +54,23 @@ async function addHrAdmin(req, res) {
   }
 }
 
+async function consumeInvite(req, res) {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ success: false, message: 'Invite token is required' });
+    }
+    const result = await consumeInviteToken(token);
+    return res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    const message = err.message || 'Invalid or expired invite token';
+    const status = message.toLowerCase().includes('expired') || message.toLowerCase().includes('invalid') ? 401 : 500;
+    console.error('[authController] consumeInvite failed', { message, stack: err.stack });
+    return res.status(status).json({ success: false, message });
+  }
+}
+
 module.exports = { adminLogin };
 module.exports.addHrAdmin = addHrAdmin;
 module.exports.verifyAdminToken = verifyAdminToken;
+module.exports.consumeInvite = consumeInvite;

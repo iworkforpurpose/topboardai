@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, ShieldCheck, Users, Briefcase, Mail, Lock } from 'lucide-react';
 import { Role } from '../types';
 
@@ -7,6 +7,7 @@ interface LoginViewProps {
 }
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [hrEmail, setHrEmail] = useState('');
   const [hrPassword, setHrPassword] = useState('');
   const [mgrEmail, setMgrEmail] = useState('');
@@ -18,7 +19,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     setError('');
     setSubmittingRole(role);
     try {
-      const res = await fetch('http://localhost:5000/api/auth/admin-login', {
+      const res = await fetch(`${API_BASE}/api/auth/admin-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, role })
@@ -40,6 +41,35 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       setSubmittingRole(null);
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteToken = params.get('invite');
+    if (!inviteToken) return;
+
+    const consume = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/consume-invite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: inviteToken })
+        });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || 'Invalid or expired invite link');
+        const { email, tempPassword } = result.data || {};
+        if (!email || !tempPassword) throw new Error('Invite link missing credentials');
+        setHrEmail(email);
+        setHrPassword(tempPassword);
+        // Clear query params to avoid repeat
+        window.history.replaceState({}, document.title, window.location.pathname);
+        await handleAdminLogin('HR', email, tempPassword);
+      } catch (err: any) {
+        setError(err.message || 'Invite link failed');
+      }
+    };
+
+    consume();
+  }, [API_BASE]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
