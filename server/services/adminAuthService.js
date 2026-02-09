@@ -1,11 +1,21 @@
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const axios = require('axios');
 const { bolticClient } = require('../config/boltic');
 
 const ADMINS_TABLE = process.env.BOLTIC_ADMINS_TABLE_NAME || 'Admins';
 const AUTH_SALT = process.env.ADMIN_AUTH_SALT || 'change_me';
+const INVITE_SECRET = process.env.ADMIN_INVITE_SECRET || process.env.ADMIN_JWT_SECRET || 'dev_admin_secret';
+const INVITE_TTL_MINUTES = Number(process.env.ADMIN_INVITE_TTL_MINUTES || 15);
+const INVITE_FRONTEND_URL = process.env.ADMIN_INVITE_FRONTEND_URL || process.env.FRONTEND_URL || 'https://topboardai.vercel.app';
+const BOLTIC_EMAIL_WEBHOOK_URL = process.env.BOLTIC_EMAIL_WEBHOOK_URL || process.env.BOLTIC_WORKFLOW_WEBHOOK_URL;
 
 function hashPassword(password) {
   return crypto.createHash('sha256').update(AUTH_SALT + password).digest('hex');
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 async function findAdminByEmail(email) {
@@ -59,6 +69,120 @@ function generatePassword() {
   return crypto.randomBytes(9).toString('base64').replace(/[+/]/g, 'A'); // ~12 chars
 }
 
+async function upsertAdminRecord(email, payload) {
+  const existing = await findAdminByEmail(email);
+  if (existing) {
+    const id = existing.id || existing._id;
+    const { data, error } = await bolticClient.records.updateById(ADMINS_TABLE, id, payload);
+    if (error) {
+      throw new Error(error.message || 'Failed to update admin');
+    }
+    return data;
+  }
+
+  const { data, error } = await bolticClient.records.insert(ADMINS_TABLE, payload);
+  if (error) {
+    throw new Error(error.message || 'Failed to create admin');
+  }
+  return data;
+}
+
+async function issueHrInvite({ email, fullName, role = 'HR Admin' }) {
+  if (!email || !fullName) {
+    throw new Error('Email and fullName are required');
+  }
+
+  const tempPassword = generatePassword();
+  const passwordHash = hashPassword(tempPassword);
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MINUTES * 60 * 1000).toISOString();
+
+  const inviteToken = jwt.sign(
+    { email, role, tempPassword },
+    INVITE_SECRET,
+    { expiresIn: `${INVITE_TTL_MINUTES}m` }
+  );
+
+  const inviteTokenHash = hashToken(inviteToken);
+
+  await upsertAdminRecord(email, {
+    email,
+    full_name: fullName,
+    role,
+    password_hash: passwordHash,
+    password: null,
+    password_plain: null,
+    invite_token_hash: inviteTokenHash,
+    invite_expires_at: expiresAt,
+  });
+
+  const inviteUrl = `${INVITE_FRONTEND_URL.replace(/\/$/, '')}/?invite=${encodeURIComponent(inviteToken)}`;
+
+  if (BOLTIC_EMAIL_WEBHOOK_URL) {
+    try {
+      await axios.post(BOLTIC_EMAIL_WEBHOOK_URL, {
+        template: 'hr_admin_invite',
+        to: email,
+        subject: 'You are invited as HR Admin',
+        data: {
+          fullName,
+          role,
+          inviteUrl,
+          expiresAt,
+        },
+      }, { timeout: 10000 });
+      console.log('[auth] invite email dispatched via Boltic webhook');
+    } catch (err) {
+      console.error('[auth] invite email dispatch failed', err.message);
+    }
+  } else {
+    console.log('[auth] BOLTIC_EMAIL_WEBHOOK_URL not set; inviteUrl:', inviteUrl);
+  }
+
+  return { inviteToken, inviteUrl, expiresAt, email, fullName, role };
+}
+
+async function consumeInviteToken(rawToken) {
+  if (!rawToken) {
+    throw new Error('Invite token is required');
+  }
+  const payload = jwt.verify(rawToken, INVITE_SECRET);
+  const email = payload.email;
+  const tempPassword = payload.tempPassword;
+  if (!email || !tempPassword) {
+    throw new Error('Invalid invite token payload');
+  }
+
+  const admin = await findAdminByEmail(email);
+  if (!admin) {
+    throw new Error('Invite not found');
+  }
+
+  const storedHash = admin.invite_token_hash || admin.inviteTokenHash;
+  const expiresAt = admin.invite_expires_at || admin.inviteExpiresAt;
+  const now = Date.now();
+
+  if (!storedHash || storedHash !== hashToken(rawToken)) {
+    throw new Error('Invite token invalid or already used');
+  }
+
+  if (expiresAt && new Date(expiresAt).getTime() < now) {
+    throw new Error('Invite token expired');
+  }
+
+  const id = admin.id || admin._id;
+  await bolticClient.records.updateById(ADMINS_TABLE, id, {
+    invite_token_hash: null,
+    invite_expires_at: null,
+    last_invite_consumed_at: new Date().toISOString(),
+  });
+
+  return {
+    email,
+    role: admin.role || 'HR Admin',
+    tempPassword,
+  };
+}
+
 async function createAdmin({ email, password, fullName, role }) {
   if (!email || !fullName || !role) {
     throw new Error('Email, fullName, and role are required');
@@ -99,4 +223,6 @@ module.exports = {
   authenticateAdmin,
   hashPassword,
   createAdmin,
+  issueHrInvite,
+  consumeInviteToken,
 };
