@@ -144,6 +144,15 @@ const MainApp: React.FC = () => {
                 ? <Navigate to="/managerdashboard" replace />
               : <Navigate to="/dashboard" replace />
         } />
+
+        {/* Invite route preserves token query and shows login for HR invite autofill */}
+        <Route path="/invite" element={
+          role === 'GUEST'
+            ? <LoginView onLogin={handleLogin} />
+            : role === 'MANAGER'
+                ? <Navigate to="/managerdashboard" replace />
+              : <Navigate to="/dashboard" replace />
+        } />
         
         {/* HR Routes */}
         <Route path="/dashboard" element={
